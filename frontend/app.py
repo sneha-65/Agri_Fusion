@@ -66,6 +66,7 @@ def load_models():
         "yield_enc":           joblib.load(os.path.join(PIK,"Yield","onehot_encoders.pkl")),
         "yield_state_map":     joblib.load(os.path.join(PIK,"Yield","state_mapping.pkl")),
         "market_model":        joblib.load(os.path.join(PIK,"Market","market_price_rf_model.pkl")),
+        "market_maps":         joblib.load(os.path.join(PIK,"Market","Market_Label_Mappings.pkl")),
         "climate_model":       joblib.load(os.path.join(PIK,"Climate","climate_risk_model.pkl")),
         "climate_enc":         joblib.load(os.path.join(PIK,"Climate","encoders.pkl")),
         "crop_model":          joblib.load(os.path.join(PIK,"Crop","model.pkl")),
@@ -1402,18 +1403,27 @@ FARMER_NAME = st.session_state.farmer_name or "Farmer"
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 def get_weather(lat, lon):
-    r = requests.get("https://api.open-meteo.com/v1/forecast", params={
-        "latitude":lat,"longitude":lon,"timezone":"auto",
-        "current":"temperature_2m,relative_humidity_2m,wind_speed_10m,shortwave_radiation",
-        "hourly":"et0_fao_evapotranspiration,precipitation",
-    }, timeout=10)
-    d = r.json()
-    return {"temperature":d["current"]["temperature_2m"],
-            "relative_humidity":d["current"]["relative_humidity_2m"],
-            "wind_speed":d["current"]["wind_speed_10m"],
-            "solar_radiation":d["current"]["shortwave_radiation"],
-            "et0":d["hourly"]["et0_fao_evapotranspiration"][0],
-            "rainfall":d["hourly"]["precipitation"][0]}
+    try:
+        r = requests.get("https://api.open-meteo.com/v1/forecast", params={
+            "latitude":lat,"longitude":lon,"timezone":"auto",
+            "current":"temperature_2m,relative_humidity_2m,wind_speed_10m,shortwave_radiation",
+            "hourly":"et0_fao_evapotranspiration,precipitation",
+        }, timeout=10)
+        d = r.json()
+        c = d.get("current", {}) or {}
+        h = d.get("hourly", {}) or {}
+        et0_arr = h.get("et0_fao_evapotranspiration") or [3.5]
+        rain_arr = h.get("precipitation") or [0.0]
+        return {
+            "temperature":       float(c.get("temperature_2m")) if c.get("temperature_2m") is not None else 27.5,
+            "relative_humidity": float(c.get("relative_humidity_2m")) if c.get("relative_humidity_2m") is not None else 65.0,
+            "wind_speed":        float(c.get("wind_speed_10m")) if c.get("wind_speed_10m") is not None else 9.5,
+            "solar_radiation":   float(c.get("shortwave_radiation")) if c.get("shortwave_radiation") is not None else 550.0,
+            "et0":               float(et0_arr[0]) if et0_arr and et0_arr[0] is not None else 3.5,
+            "rainfall":          float(rain_arr[0]) if rain_arr and rain_arr[0] is not None else 0.0,
+        }
+    except Exception:
+        return {"temperature": 27.5, "relative_humidity": 65.0, "wind_speed": 9.5, "solar_radiation": 550.0, "et0": 3.5, "rainfall": 0.0}
 
 def get_forecast(lat, lon, days=7):
     r = requests.get("https://api.open-meteo.com/v1/forecast", params={
@@ -3509,6 +3519,7 @@ elif page == "📈  Yield Estimator":
         y_district = _get_valid_district(y_state, y_district, YIELD_DISTRICTS_BY_STATE)
         # Convert acres to hectares for the model
         area_ha = round(y_area * 0.4047, 4)
+        crop_emoji = CROP_EMOJI.get(y_crop, "🌾")
 
         try:
             with st.spinner("📡 Fetching live weather and estimating yield..."):

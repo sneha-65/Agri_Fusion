@@ -23,13 +23,17 @@ def get_weather(lat: float, lon: float) -> dict:
         )
         resp.raise_for_status()
         data = resp.json()
+        c = data.get("current", {}) or {}
+        h = data.get("hourly", {}) or {}
+        et0_arr = h.get("et0_fao_evapotranspiration") or [3.5]
+        rain_arr = h.get("precipitation") or [0.13]
         return {
-            "temperature":       data["current"]["temperature_2m"],
-            "relative_humidity": data["current"]["relative_humidity_2m"],
-            "wind_speed":        data["current"]["wind_speed_10m"],
-            "solar_radiation":   data["current"]["shortwave_radiation"],
-            "et0":               data["hourly"]["et0_fao_evapotranspiration"][0],
-            "rainfall":          data["hourly"]["precipitation"][0],
+            "temperature":       float(c.get("temperature_2m")) if c.get("temperature_2m") is not None else 27.5,
+            "relative_humidity": float(c.get("relative_humidity_2m")) if c.get("relative_humidity_2m") is not None else 65.0,
+            "wind_speed":        float(c.get("wind_speed_10m")) if c.get("wind_speed_10m") is not None else 9.5,
+            "solar_radiation":   float(c.get("shortwave_radiation")) if c.get("shortwave_radiation") is not None else 550.0,
+            "et0":               float(et0_arr[0]) if et0_arr and et0_arr[0] is not None else 3.5,
+            "rainfall":          float(rain_arr[0]) if rain_arr and rain_arr[0] is not None else 0.13,
         }
     except (requests.exceptions.RequestException, KeyError, IndexError, TypeError):
         return dict(_FALLBACK_CURRENT)

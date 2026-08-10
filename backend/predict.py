@@ -44,19 +44,25 @@ def next_irrigation_days(water_mm):
     elif water_mm >= 5: return 2
     else: return 3
 
+def _safe_float(val, default):
+    try:
+        return float(val) if val is not None else default
+    except (ValueError, TypeError):
+        return default
+
 def predict(user_input, weather):
     soil    = get_soil_data(user_input["city"])
     kc_data = get_kc_data(user_input["crop"], user_input["growth_stage"])
 
     row = {
-        "state":              STATE_MAP[soil["State"]],
+        "state":              STATE_MAP.get(soil["State"], 0),
         "city":               user_input["city"],
-        "temperature":        weather["temperature"],
-        "relative_humidity":  weather["relative_humidity"],
-        "rainfall":           weather["rainfall"],
-        "wind_speed":         weather["wind_speed"],
-        "solar_radiation":    weather["solar_radiation"],
-        "et0":                weather["et0"],
+        "temperature":        _safe_float(weather.get("temperature"), 27.5),
+        "relative_humidity":  _safe_float(weather.get("relative_humidity"), 65.0),
+        "rainfall":           _safe_float(weather.get("rainfall"), 0.0),
+        "wind_speed":         _safe_float(weather.get("wind_speed"), 9.5),
+        "solar_radiation":    _safe_float(weather.get("solar_radiation"), 550.0),
+        "et0":                _safe_float(weather.get("et0"), 3.5),
         "climate_risk_score": soil["Climate_Risk_Score"],
         "climate_risk":       CLIMATE_RISK_MAP[soil["Climate_Risk"]],
         "soil_ph":            soil["Soil_pH"],
