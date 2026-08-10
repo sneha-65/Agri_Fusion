@@ -7,3 +7,6 @@ xgboost
 requests
 supabase
 python-dotenv
+fastapi
+uvicorn
+pydantic
