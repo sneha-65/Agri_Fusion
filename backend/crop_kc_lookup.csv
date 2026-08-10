@@ -1,0 +1,57 @@
+Crop,Growth_Stage,Kc,Root_Depth_m
+Banana,Development,0.8,0.6
+Banana,Initial,0.5,0.3
+Banana,Late-season,1.0,0.9
+Banana,Mid-season,1.1,0.9
+Beans,Development,0.78,0.5
+Beans,Initial,0.5,0.3
+Beans,Late-season,0.9,0.7
+Beans,Mid-season,1.05,0.7
+Black Gram Dal(Urd Dal),Development,0.75,0.55
+Black Gram Dal(Urd Dal),Initial,0.4,0.3
+Black Gram Dal(Urd Dal),Late-season,0.35,0.8
+Black Gram Dal(Urd Dal),Mid-season,1.1,0.8
+Cotton,Development,0.76,0.9
+Cotton,Initial,0.35,0.3
+Cotton,Late-season,0.6,1.5
+Cotton,Mid-season,1.18,1.5
+Grapes,Development,0.57,0.9
+Grapes,Initial,0.3,0.3
+Grapes,Late-season,0.45,1.5
+Grapes,Mid-season,0.85,1.5
+Karbuja(Musk Melon),Development,0.68,0.75
+Karbuja(Musk Melon),Initial,0.5,0.3
+Karbuja(Musk Melon),Late-season,0.6,1.2
+Karbuja(Musk Melon),Mid-season,0.85,1.2
+Maize,Development,0.75,0.9
+Maize,Initial,0.3,0.3
+Maize,Late-season,0.6,1.5
+Maize,Mid-season,1.2,1.5
+Mango,Development,0.7,1.0
+Mango,Initial,0.6,0.5
+Mango,Late-season,0.7,1.5
+Mango,Mid-season,0.8,1.5
+Orange,Development,0.68,0.85
+Orange,Initial,0.7,0.5
+Orange,Late-season,0.7,1.2
+Orange,Mid-season,0.65,1.2
+Papaya,Development,0.75,0.5
+Papaya,Initial,0.5,0.3
+Papaya,Late-season,0.9,0.7
+Papaya,Mid-season,1.0,0.7
+Pomegranate,Development,0.72,0.8
+Pomegranate,Initial,0.5,0.4
+Pomegranate,Late-season,0.6,1.2
+Pomegranate,Mid-season,0.95,1.2
+Rice,Development,1.12,0.3
+Rice,Initial,1.05,0.1
+Rice,Late-season,0.9,0.5
+Rice,Mid-season,1.2,0.5
+Tender Coconut,Development,0.85,0.85
+Tender Coconut,Initial,0.7,0.5
+Tender Coconut,Late-season,0.85,1.2
+Tender Coconut,Mid-season,1.0,1.2
+Water Melon,Development,0.7,0.75
+Water Melon,Initial,0.4,0.3
+Water Melon,Late-season,0.75,1.2
+Water Melon,Mid-season,1.0,1.2

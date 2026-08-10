@@ -1,0 +1,29 @@
+City,State,Soil_pH,Organic_Carbon,Sand_Percentage,Silt_Percentage,Clay_Percentage,CEC,Bulk_Density,Field_Capacity,Wilting_Point,Available_Water,Nitrogen,Soil_Type,Climate_Risk,Climate_Risk_Score
+Adilabad,Telangana,7.1,12.0,28.7,31.5,39.8,36.1,1.62,33.7,16.8,16.9,1.36,Black Soil (Clayey),Low,29.66
+Anakapalli,Andhra Pradesh,6.6,21.1,34.6,35.2,30.2,21.3,1.33,27.9,16.1,11.8,1.84,Alluvial Soil,Low,32.99
+Bapatla,Andhra Pradesh,6.7,26.0,35.7,35.3,29.0,26.8,1.3,29.3,17.7,11.6,1.85,Alluvial Soil,Low,34.32
+Chittoor,Andhra Pradesh,6.9,26.2,38.0,27.8,34.2,28.6,1.37,30.3,17.1,13.2,1.9,Alluvial Soil,Low,32.62
+Eluru,Andhra Pradesh,6.7,24.4,38.2,32.8,29.0,25.2,1.38,31.5,17.5,14.0,2.09,Alluvial Soil,Low,33.01
+Hanumakonda,Telangana,7.0,13.8,37.3,28.2,34.4,28.4,1.43,29.1,14.3,14.8,1.43,Alluvial Soil,Low,30.79
+Hyderabad,Telangana,6.6,13.5,46.4,18.5,35.1,18.8,1.56,29.1,13.2,15.9,1.9,Loamy Soil,Low,30.1
+Jagtial,Telangana,7.0,17.2,28.8,35.4,35.8,33.1,1.47,30.6,16.4,14.2,1.32,Black Soil (Clayey),Low,30.15
+Jangaon,Telangana,6.9,31.1,39.5,23.9,36.6,22.6,1.46,25.9,16.9,9.0,1.48,Loamy Soil,Low,31.22
+Kakinada,Andhra Pradesh,6.7,34.2,36.6,34.2,29.2,24.2,1.25,29.3,16.6,12.7,1.92,Alluvial Soil,Low,34.19
+Kamareddy,Telangana,7.3,15.6,37.5,24.4,38.0,35.2,1.56,31.8,17.1,14.7,1.41,Loamy Soil,Low,30.37
+Karimnagar,Telangana,7.1,14.6,30.0,33.3,36.7,31.0,1.51,27.6,17.6,10.0,1.44,Black Soil (Clayey),Low,30.43
+Khammam,Telangana,6.7,34.1,39.1,35.9,25.0,19.0,1.28,32.0,13.9,18.1,1.56,Alluvial Soil,Low,31.45
+Kurnool,Andhra Pradesh,7.1,29.2,42.5,27.8,29.7,21.0,1.44,30.9,15.0,15.9,1.32,Alluvial Soil,Low,31.08
+Mahabubabad,Telangana,6.8,19.1,36.2,36.9,26.8,21.7,1.39,32.7,14.6,18.1,1.69,Alluvial Soil,Low,30.94
+Mahabubnagar,Telangana,6.8,17.4,40.0,29.4,30.6,27.5,1.54,26.3,17.5,8.8,1.77,Alluvial Soil,Low,31.0
+Mancherial,Telangana,6.9,15.6,28.4,35.2,36.4,30.0,1.46,34.6,16.5,18.1,1.32,Black Soil (Clayey),Low,31.06
+Medak,Telangana,7.3,12.7,32.7,31.0,36.3,31.5,1.56,31.6,17.4,14.2,1.53,Black Soil (Clayey),Low,30.65
+Mulugu,Telangana,6.9,17.7,37.3,36.0,26.6,23.5,1.47,32.4,14.8,17.6,1.81,Alluvial Soil,Low,30.89
+Nagarkurnool,Telangana,6.9,16.1,33.4,33.5,33.0,27.1,1.6,29.9,18.1,11.8,1.28,Alluvial Soil,Low,30.85
+Nalgonda,Telangana,6.6,27.1,47.7,25.0,27.3,19.7,1.49,29.1,15.4,13.7,2.42,Alluvial Soil,Low,31.32
+Nandyal,Andhra Pradesh,7.1,28.5,42.9,28.1,29.1,19.9,1.36,29.8,15.2,14.6,1.56,Alluvial Soil,Low,31.47
+Narayanpet,Telangana,6.9,16.5,40.1,30.3,29.6,24.3,1.55,28.3,16.3,12.0,1.38,Alluvial Soil,Low,30.85
+Nirmal,Telangana,7.0,12.2,29.8,31.8,38.4,33.6,1.47,32.8,16.9,15.9,1.25,Black Soil (Clayey),Low,30.43
+Srikakulam,Andhra Pradesh,6.6,37.1,32.0,37.8,30.2,25.1,1.32,27.9,17.4,10.5,1.59,Alluvial Soil,Low,32.17
+Tirupati,Andhra Pradesh,7.1,31.0,36.6,27.6,35.8,25.5,1.39,31.0,16.9,14.1,2.13,Loamy Soil,Low,33.15
+Visakhapatnam,Andhra Pradesh,6.6,24.5,36.3,37.2,26.5,21.4,1.36,28.1,15.0,13.1,1.91,Alluvial Soil,Low,33.34
+Vizianagaram,Andhra Pradesh,6.4,19.5,37.0,34.5,28.5,19.4,1.34,30.1,14.1,16.0,1.54,Alluvial Soil,Low,32.88
