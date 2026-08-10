@@ -147,13 +147,19 @@ def api_recommend_crop(city: str):
     return recommend_crop(city=city, model=M["crop_model"], feature_columns=M["crop_columns"], label_encoder=M["crop_label_enc"], crop_encoders=M["crop_encoders"], city_soil_df=CITY_SOIL)
 
 def api_predict_irrigation(user_input: dict, weather: dict):
+    farm_size_val = user_input.get("farm_size")
+    farm_size_float = float(farm_size_val) if farm_size_val is not None else 2.0
+
+    pump_lpm_val = user_input.get("pump_lpm")
+    pump_lpm_float = float(pump_lpm_val) if pump_lpm_val is not None else 100.0
+
     ok, res = call_fastapi_api("/api/predict/irrigation", method="POST", json_data={
         "city": user_input.get("city"),
         "crop": user_input.get("crop"),
-        "growth_stage": user_input.get("growth_stage", "Development"),
-        "farm_size_acres": float(user_input.get("farm_size", 2.0)),
-        "pump_lpm": float(user_input.get("pump_lpm", 100.0)),
-        "irrigation_method": user_input.get("irrigation_method", "Drip")
+        "growth_stage": user_input.get("growth_stage") or "Development",
+        "farm_size_acres": farm_size_float,
+        "pump_lpm": pump_lpm_float,
+        "irrigation_method": user_input.get("irrigation_method") or "Drip"
     })
     if ok:
         return res
@@ -3284,7 +3290,7 @@ elif page == "💧  Irrigation Advisor":
                             {time_display}
                         </div>
                         <div style='font-size:12px; color:rgba(255,255,255,0.35); margin-top:4px;'>
-                            Based on {int(irr_pump)} L/min pump
+                            Based on {int(irr_pump or 100)} L/min pump
                             &nbsp;·&nbsp; {irr_size} {irr_unit} farm
                         </div>
                     </div>
