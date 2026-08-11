@@ -39,8 +39,11 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/..")
 import importlib
 import backend.database as backend_db
 importlib.reload(backend_db)
+import backend.crop_recommendation as crop_rec_mod
+importlib.reload(crop_rec_mod)
 
 from backend.predict import predict, get_soil_data, city_soil, crop_kc
+
 from backend.weather import get_weather, get_forecast, CITY_COORDS
 from backend.database import (
     save_climate_risk,
@@ -151,11 +154,18 @@ def api_predict_climate_risk(city: str, crop: str):
     return predict_climate_risk(city=city, crop=crop, model=M["climate_model"], encoders=M["climate_enc"], city_soil_df=CITY_SOIL)
 
 def api_recommend_crop(city: str):
-    ok, res = call_fastapi_api("/api/predict/crop-recommendation", method="POST", json_data={"city": city})
-    if ok:
-        return res
-    from backend.crop_recommendation import recommend_crop
-    return recommend_crop(city=city, model=M["crop_model"], feature_columns=M["crop_columns"], label_encoder=M["crop_label_enc"], crop_encoders=M["crop_encoders"], city_soil_df=CITY_SOIL)
+    import importlib
+    import backend.crop_recommendation as cr
+    importlib.reload(cr)
+    arts = cr.get_latest_crop_model_artifacts()
+    return cr.recommend_crop(
+        city=city,
+        model=arts["model"],
+        feature_columns=arts["feature_columns"],
+        label_encoder=arts["label_encoder"],
+        crop_encoders=arts["crop_encoders"],
+        city_soil_df=CITY_SOIL
+    )
 
 def api_predict_irrigation(user_input: dict, weather: dict):
     farm_size_val = user_input.get("farm_size")
@@ -2914,23 +2924,22 @@ elif page == "🌾  Crop Recommendation":
                     Just select your city — the rest is automatic
                 </div>
                 <div style='color:rgba(255,255,255,0.65); font-size:13px;'>
-                    Live weather • Soil pH & nitrogen • Regional phosphorus & potassium —
-                    all fetched automatically, no soil test numbers to type in
+                    Live weather (Open-Meteo) & local soil profile (SoilGrids lookup) —
+                    all fetched automatically for your location.
                 </div>
             </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Input form (1 field only) ───────────────────────────────────────────
     with st.form("crop_form"):
-        cr_city = st.selectbox("📍 Your City", CITIES)
+        cr_city = st.selectbox("📍 Your City / District", CITIES)
         submitted_crop = st.form_submit_button(
             "🌱 Get Crop Recommendation", use_container_width=True
         )
 
     if submitted_crop:
-        with st.spinner("📡 Fetching live weather + soil data from Open-Meteo & SoilGrids..."):
+        with st.spinner("📡 Fetching live weather + soil data for your city..."):
             try:
                 result = api_recommend_crop(cr_city)
 
@@ -2943,18 +2952,18 @@ elif page == "🌾  Crop Recommendation":
                                 📍 {result["location"]["city"]} &nbsp;|&nbsp; 📅 {result["fetched_at"]}
                             </div>
                             <div style='font-size:13px; color:rgba(255,255,255,0.5); margin-bottom:12px;'>
-                                Recommended Crop
+                                Recommended Optimal Crop
                             </div>
                             <div style='font-size:42px; font-weight:800; color:#7cb342;'>
                                 {result["crop_emoji"]} {result["recommended_crop"]}
                             </div>
                         </div>
                         <div style='text-align:center; min-width:130px;'>
-                            <div style='font-size:11px; color:rgba(255,255,255,0.5); margin-bottom:6px;'>CONFIDENCE</div>
+                            <div style='font-size:11px; color:rgba(255,255,255,0.5); margin-bottom:6px;'>MODEL CONFIDENCE</div>
                             <div style='font-size:52px; font-weight:800;
                                         background:linear-gradient(135deg,#7cb342,#fff);
                                         -webkit-background-clip:text; background-clip:text; color:transparent;'>
-                                {result["confidence_percent"]-4}
+                                {result["confidence_percent"]}
                             </div>
                             <div style='font-size:14px; color:rgba(255,255,255,0.5);'>%</div>
                         </div>
@@ -2981,7 +2990,7 @@ elif page == "🌾  Crop Recommendation":
                     st.markdown(f"""
                     <div class='glass'>
                         <div style='color:#7cb342; font-weight:700; font-size:14px; margin-bottom:10px;'>
-                            ✅ How To Take Care Of It
+                            ✅ How To Care For This Crop
                         </div>
                         <div style='color:rgba(255,255,255,0.8); font-size:13px; line-height:1.6;'>
                             {result["care_tips"]}
@@ -2989,29 +2998,34 @@ elif page == "🌾  Crop Recommendation":
                     </div>
                     """, unsafe_allow_html=True)
 
-                # ── 3. AUTO-FETCHED DATA (transparency expander) ────────────
-                with st.expander("📊 View Auto-Fetched Data (for reference)"):
-                    st.caption(
-                        "Weather was fetched automatically from Open-Meteo and soil pH/nitrogen "
-                        "from SoilGrids. You did not need to enter them. Phosphorus & potassium "
-                        "are regional averages, not a live lab test."
-                    )
-                    if result.get("note"):
-                        st.warning(result["note"])
+                # ── 2b. ALTERNATIVE SUITABLE CROPS ─────────────────────────
+                if result.get("alternative_crops"):
+                    st.markdown("<h4 style='color:#7cb342; margin-top:20px; font-size:16px;'>🌾 Alternative Suitable Crops</h4>", unsafe_allow_html=True)
+                    alt_cols = st.columns(len(result["alternative_crops"]))
+                    for idx, alt in enumerate(result["alternative_crops"]):
+                        with alt_cols[idx]:
+                            st.markdown(f"""
+                            <div class='glass' style='text-align:center; padding:12px;'>
+                                <div style='font-size:28px;'>{alt["emoji"]}</div>
+                                <div style='font-weight:700; color:#fff; font-size:14px;'>{alt["crop"]}</div>
+                                <div style='font-size:12px; color:#7cb342; font-weight:600;'>{alt["confidence"]}% Match</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                # ── 3. FEATURE METRICS BREAKDOWN ────────────────────────────
+                with st.expander("📊 View Weather & Soil Data Used for Prediction"):
                     w, s = result["weather"], result["soil"]
                     c1, c2, c3 = st.columns(3)
                     c1.metric("🌡️ Temperature", f"{w['temperature']} °C")
                     c2.metric("💧 Humidity", f"{w['humidity']} %")
-                    c3.metric("🌧️ Rainfall Today", f"{w['rainfall']} mm")
+                    c3.metric("🌧️ Rainfall Rate", f"{w['rainfall']} mm")
 
                     c4, c5, c6, c7 = st.columns(4)
                     c4.metric("🧪 Soil pH", s["soil_ph"])
-                    c5.metric("🌱 Nitrogen (N)", s["nitrogen"])
-                    c6.metric("🧬 Organic Matter*", s["organic_carbon"])
-                    c7.metric("🧱 Soil Texture (Clay)", f"{s['clay']}%")
-                    st.caption("*Regional estimate — get a Soil Health Card test for exact values.")
+                    c5.metric("🌱 Nitrogen (N)", f"{s['nitrogen']} kg/ha")
+                    c6.metric("🧬 Organic Carbon", f"{s['organic_carbon']}%")
+                    c7.metric("🧱 Soil Texture", f"{s.get('soil_type', 'Clay/Sand')}")
 
-                # ── SAVE TO SUPABASE ──────────────────────────────────────────
                 try:
                     save_crop_recommendation(
                         st.session_state.get("farmer_phone", "guest"),
@@ -3022,13 +3036,8 @@ elif page == "🌾  Crop Recommendation":
                 except Exception:
                     pass
 
-            except requests.exceptions.Timeout:
-                st.error("⏱️ Weather/soil data request timed out. Please try again in a moment.")
-            except requests.exceptions.ConnectionError:
-                st.error("📡 No internet connection. Please check your network and try again.")
             except Exception as e:
-                st.error(f"❌ Error: {e}")
-                st.info("Try selecting a different city or check if Open-Meteo / SoilGrids is reachable.")
+                st.error(f"❌ Error obtaining recommendation: {e}")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # IRRIGATION

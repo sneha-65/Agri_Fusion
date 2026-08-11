@@ -205,13 +205,13 @@ async def predict_climate_risk_api(req: ClimateRiskRequest):
 @app.post("/predict/crop-recommendation")
 async def predict_crop_recommendation_api(req: CropRecommendationRequest):
     try:
-        M = fusion_mod.get_models()
+        arts = crop_mod.get_latest_crop_model_artifacts()
         res = crop_mod.recommend_crop(
             city=req.city,
-            model=M["crop_model"],
-            feature_columns=M["crop_columns"],
-            label_encoder=M["crop_label_enc"],
-            crop_encoders=M["crop_encoders"]
+            model=arts["model"],
+            feature_columns=arts["feature_columns"],
+            label_encoder=arts["label_encoder"],
+            crop_encoders=arts["crop_encoders"]
         )
         return JSONResponse(content=res)
     except Exception as e:

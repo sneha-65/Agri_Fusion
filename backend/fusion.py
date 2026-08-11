@@ -71,15 +71,29 @@ CITY_META = {
     "Hanumakonda":   {"state": "Telangana",       "lat": 17.99, "lon": 79.59, "elev": 255, "district": "Hanumakonda"},
     "Hyderabad":     {"state": "Telangana",       "lat": 17.38, "lon": 78.47, "elev": 536, "district": "Nalgonda"},
     "Jagtial":       {"state": "Telangana",       "lat": 18.79, "lon": 78.91, "elev": 223, "district": "Karimnagar"},
+    "Jangaon":       {"state": "Telangana",       "lat": 17.72, "lon": 79.16, "elev": 240, "district": "Hanumakonda"},
     "Kakinada":      {"state": "Andhra Pradesh",  "lat": 16.98, "lon": 82.24, "elev": 9,   "district": "SPSR Nellore"},
     "Kamareddy":     {"state": "Telangana",       "lat": 18.32, "lon": 78.34, "elev": 388, "district": "Nalgonda"},
     "Karimnagar":    {"state": "Telangana",       "lat": 18.43, "lon": 79.13, "elev": 230, "district": "Karimnagar"},
     "Khammam":       {"state": "Telangana",       "lat": 17.25, "lon": 80.15, "elev": 85,  "district": "Khammam"},
     "Kurnool":       {"state": "Andhra Pradesh",  "lat": 15.83, "lon": 78.04, "elev": 303, "district": "Kurnool"},
+    "Mahabubabad":   {"state": "Telangana",       "lat": 17.60, "lon": 80.00, "elev": 170, "district": "Khammam"},
+    "Mahabubnagar":  {"state": "Telangana",       "lat": 16.75, "lon": 77.99, "elev": 498, "district": "Nalgonda"},
+    "Mancherial":    {"state": "Telangana",       "lat": 18.87, "lon": 79.46, "elev": 150, "district": "Adilabad"},
+    "Medak":         {"state": "Telangana",       "lat": 18.05, "lon": 78.26, "elev": 442, "district": "Nalgonda"},
+    "Mulugu":        {"state": "Telangana",       "lat": 18.19, "lon": 79.94, "elev": 180, "district": "Hanumakonda"},
+    "Nagarkurnool":  {"state": "Telangana",       "lat": 16.49, "lon": 78.30, "elev": 450, "district": "Nalgonda"},
     "Nalgonda":      {"state": "Telangana",       "lat": 17.05, "lon": 79.27, "elev": 371, "district": "Nalgonda"},
+    "Nandyal":       {"state": "Andhra Pradesh",  "lat": 15.48, "lon": 78.48, "elev": 203, "district": "Kurnool"},
+    "Narayanpet":    {"state": "Telangana",       "lat": 16.74, "lon": 77.50, "elev": 430, "district": "Nalgonda"},
+    "Nirmal":        {"state": "Telangana",       "lat": 19.10, "lon": 78.34, "elev": 240, "district": "Adilabad"},
+    "Srikakulam":    {"state": "Andhra Pradesh",  "lat": 18.29, "lon": 83.89, "elev": 32,  "district": "Visakhapatnam"},
     "Tirupati":      {"state": "Andhra Pradesh",  "lat": 13.63, "lon": 79.42, "elev": 182, "district": "Chittor"},
     "Visakhapatnam": {"state": "Andhra Pradesh",  "lat": 17.68, "lon": 83.22, "elev": 45,  "district": "Visakhapatnam"},
+    "Vizianagaram":  {"state": "Andhra Pradesh",  "lat": 18.11, "lon": 83.40, "elev": 63,  "district": "Visakhapatnam"},
 }
+_DEFAULT_CITY_META = {"state": "Telangana", "lat": 17.38, "lon": 78.47, "elev": 536, "district": "Nalgonda"}
+
 
 ACRE_HA = 0.4047
 MARKET_CROP_MAP = {"Rice": "Rice", "Maize": "Maize", "Cotton": "Cotton", "Banana": "Banana",
