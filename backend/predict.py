@@ -176,19 +176,20 @@ def predict(user_input: dict, weather: dict) -> dict:
     total_crop_demand_liters = crop_water_req_mm * area_m2  # Total gross crop ETc demand for comparison
 
     # 7. Motor Running Time (calculated for user pump_lpm or 100 L/min reference)
+    ref_base_liters = total_crop_demand_liters if total_crop_demand_liters > 0 else (net_irrigation_mm * area_m2)
+    if ref_base_liters > 0:
+        ref_motor_mins = int(round(ref_base_liters / 100.0))
+        ref_motor_running_time = format_motor_runtime(ref_motor_mins)
+    else:
+        ref_motor_mins = None
+        ref_motor_running_time = None
+
     if pump_lpm and pump_lpm > 0 and irrigation_liters > 0:
         motor_mins = int(round(irrigation_liters / pump_lpm))
         motor_running_time = format_motor_runtime(motor_mins)
-        ref_motor_running_time = motor_running_time
         motor_time_exact = True
-    elif irrigation_liters > 0:
-        motor_mins = int(round(irrigation_liters / 100.0))
-        ref_motor_running_time = format_motor_runtime(motor_mins)
-        motor_running_time = None
-        motor_time_exact = False
     else:
         motor_mins = None
-        ref_motor_running_time = None
         motor_running_time = None
         motor_time_exact = False
 
@@ -203,12 +204,22 @@ def predict(user_input: dict, weather: dict) -> dict:
     EVENING_WINDOW = "04:30 PM – 06:30 PM"
 
     if already_irrigated:
+        net_irrigation_mm = 0.0
+        gross_irrigation_mm = 0.0
+        irrigation_liters = 0.0
+        motor_mins = None
+        motor_running_time = None
+        motor_time_exact = False
+
+        next_days = max(2, next_irrigation_days(crop_water_req_mm, rain_val))
+        next_date_dt = now_ist + timedelta(days=next_days)
+        next_irrigation_date_str = next_date_dt.strftime("%d %B %Y")
+
         irrigation_required_today = False
         irrigation_status = "WATERING COMPLETED TODAY"
-        farmer_message = "✅ Already Irrigated Today. No more irrigation is recommended today."
         best_time = MORNING_WINDOW
-        best_date = now_ist.strftime("%d %B %Y")
-        next_days = 2
+        best_date = next_irrigation_date_str
+        farmer_message = f"✅ Already Irrigated Today. No more water is needed today. Next recommended watering is on {best_date} ({best_time})."
         reason = "You indicated that watering is already completed for today."
 
     elif not is_irrigation_needed:
@@ -265,7 +276,9 @@ def predict(user_input: dict, weather: dict) -> dict:
     next_irrigation_display = "In 1 day" if next_days == 1 else f"In {next_days} days"
 
     # Farmer-friendly display formatting
-    if irrigation_liters > 0:
+    if already_irrigated:
+        water_display_str = "0 liters (Watering completed today)"
+    elif irrigation_liters > 0:
         water_disp_val = round(irrigation_liters, -3)
         if water_disp_val == 0:
             water_disp_val = round(irrigation_liters)

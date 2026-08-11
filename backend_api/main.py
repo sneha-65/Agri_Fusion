@@ -56,6 +56,7 @@ class IrrigationRequest(BaseModel):
     farm_size_acres: float = 2.0
     pump_lpm: Optional[float] = 100.0
     irrigation_method: str = "Drip"
+    already_irrigated_today: bool = False
 
 class ClimateRiskRequest(BaseModel):
     city: str
@@ -175,7 +176,8 @@ async def predict_irrigation_api(req: IrrigationRequest):
             "farm_size": req.farm_size_acres,
             "farm_size_unit": "Acres",
             "pump_lpm": req.pump_lpm or 100.0,
-            "irrigation_method": req.irrigation_method
+            "irrigation_method": req.irrigation_method,
+            "already_irrigated_today": req.already_irrigated_today,
         }
         res = irrigation_mod.predict(user_input, weather)
         return JSONResponse(content=res)
