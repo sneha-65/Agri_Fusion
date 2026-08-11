@@ -58,6 +58,8 @@ try:
     from backend.database import save_feedback
 except Exception:
     save_feedback = getattr(backend_db, "save_feedback", None)
+save_yield = getattr(backend_db, "save_yield", save_yield)
+save_market_price = getattr(backend_db, "save_market_price", save_market_price)
 from datetime import datetime, timedelta
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
@@ -1403,16 +1405,34 @@ def render_auth_screen():
                             st.markdown(f'<div class="field-error">⚠️ {msg}</div>', unsafe_allow_html=True)
 
 # ─── Auth gate: block the rest of the app until signed in ─────────────────────
+# Sync with st.query_params so browser refresh (F5) keeps user logged in on current page
+q_auth  = st.query_params.get("auth")
+q_phone = st.query_params.get("phone")
+q_name  = st.query_params.get("name")
+
 if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-if "farmer_name" not in st.session_state:
-    st.session_state.farmer_name = ""
-if "farmer_phone" not in st.session_state:
-    st.session_state.farmer_phone = ""
+    if q_auth == "1" and q_phone:
+        st.session_state.authenticated = True
+        st.session_state.farmer_phone = q_phone
+        st.session_state.farmer_name  = q_name or "Farmer"
+    else:
+        st.session_state.authenticated = False
+
+if "farmer_name" not in st.session_state or not st.session_state.farmer_name:
+    st.session_state.farmer_name = q_name or ""
+if "farmer_phone" not in st.session_state or not st.session_state.farmer_phone:
+    st.session_state.farmer_phone = q_phone or ""
 
 if not st.session_state.authenticated:
     render_auth_screen()
     st.stop()
+
+# Ensure query params stay synced for page refresh (F5)
+if st.session_state.farmer_phone:
+    st.query_params["auth"]  = "1"
+    st.query_params["phone"] = st.session_state.farmer_phone
+    if st.session_state.farmer_name:
+        st.query_params["name"]  = st.session_state.farmer_name
 
 FARMER_NAME = st.session_state.farmer_name or "Farmer"
 
@@ -1549,6 +1569,7 @@ def render_prediction_breadcrumb(current_label: str):
                          use_container_width=True, disabled=active,
                          help=desc):
                 st.session_state.pred_choice = label
+                st.query_params["pred"] = label
                 st.rerun()
     st.markdown("</div><div style='height:8px;'></div>", unsafe_allow_html=True)
 
@@ -1581,23 +1602,39 @@ with st.sidebar:
         "🚀  Agri Fusion (All-in-One)",
         "💬  Feedback",
     ]
+    q_page = st.query_params.get("page")
+    q_pred = st.query_params.get("pred")
+
     if "sidebar_nav" not in st.session_state:
-        st.session_state.sidebar_nav = nav_labels[2]
-    if st.session_state.sidebar_nav not in nav_labels:
-        st.session_state.sidebar_nav = nav_labels[2]
+        if q_page and q_page in nav_labels:
+            st.session_state.sidebar_nav = q_page
+        else:
+            st.session_state.sidebar_nav = nav_labels[2]
+
+    if "pred_choice" not in st.session_state or st.session_state.pred_choice not in PRED_LABELS:
+        if q_pred and q_pred in PRED_LABELS:
+            st.session_state.pred_choice = q_pred
+        else:
+            st.session_state.pred_choice = PRED_LABELS[0]
 
     selected_nav = st.session_state.sidebar_nav
     for label in nav_labels:
         if st.button(label, key=f"nav_{label}", use_container_width=True, disabled=(label == selected_nav)):
             st.session_state.sidebar_nav = label
+            st.query_params["page"] = label
             if label == "🔮  Predictions":
                 st.session_state.pred_choice = PRED_LABELS[0]
+                st.query_params["pred"] = PRED_LABELS[0]
             st.rerun()
 
     if selected_nav == "🔮  Predictions":
         page = st.session_state.pred_choice
     else:
         page = selected_nav
+
+    st.query_params["page"] = selected_nav
+    if selected_nav == "🔮  Predictions":
+        st.query_params["pred"] = st.session_state.pred_choice
 
     st.markdown("<div style='margin-top:14px;'></div>", unsafe_allow_html=True)
 
@@ -1621,6 +1658,7 @@ with st.sidebar:
         """, unsafe_allow_html=True)
 
     if st.button("🚪 Logout", key="sidebar_logout", use_container_width=True):
+        st.query_params.clear()
         st.session_state.authenticated = False
         st.session_state.farmer_name = ""
         st.session_state.farmer_phone = ""
@@ -3775,26 +3813,15 @@ elif page == "🚀  Agri Fusion (All-in-One)":
 
                 # ── SAVE TO SUPABASE ──────────────────────────────────────────
                 try:
-                    from backend.database import save_prediction
-                    save_prediction({
-                        "city":                     f_city,
-                        "farm_size_acres":          f_acres,
-                        "season":                   R.get("season"),
-                        "recommended_crop":         R["crop"]["recommended_crop"] if R.get("crop") else None,
-                        "climate_risk_level":       R["climate_risk"]["risk_level"] if R.get("climate_risk") else None,
-                        "climate_risk_score":       R["climate_risk"]["risk_score"] if R.get("climate_risk") else None,
-                        "water_requirement_mm_day": R["irrigation"]["water_requirement_mm_day"] if R.get("irrigation") else None,
-                        "total_liters":             R["irrigation"]["total_liters"] if R.get("irrigation") else None,
-                        "yield_per_hectare":        R["yield"]["yield_per_hectare"] if R.get("yield") else None,
-                        "total_tonnes":             R["yield"]["total_tonnes"] if R.get("yield") else None,
-                        "market_crop":              R["market"]["market_crop"] if R.get("market") else None,
-                        "price_per_quintal":        R["market"]["price_per_quintal"] if R.get("market") else None,
-                        "total_value_inr":          R["market"]["total_value_inr"] if R.get("market") else None,
-                        "stage_errors":             R.get("errors") or None,
-                        "predicted_at":             datetime.now().isoformat(),
-                    }, table="fusion_predictions")
-                except Exception:
-                    pass
+                    save_fusion_fn = getattr(backend_db, "save_fusion", None)
+                    if save_fusion_fn:
+                        save_fusion_fn(
+                            st.session_state.get("farmer_phone", "guest"),
+                            {"city": f_city, "farm_size_acres": f_acres},
+                            R
+                        )
+                except Exception as e:
+                    print(f"[Supabase] save_fusion error: {e}")
 
             except Exception as e:
                 st.error(f"❌ Could not create farm plan: {e}")
