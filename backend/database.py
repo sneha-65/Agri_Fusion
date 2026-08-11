@@ -310,3 +310,26 @@ def save_fusion(farmer_phone: str, inputs: dict, results: dict):
 def save_prediction(data: dict, table: str = "irrigation_predictions") -> bool:
     """Legacy generic function."""
     return _insert(table, data)
+
+
+# ── Feedback ──────────────────────────────────────────────────────────────────
+def save_feedback(
+    farmer_phone: Optional[str] = None,
+    rating: Optional[int] = None,
+    difficulties: Optional[str] = None,
+    incorrect_model: Optional[str] = None,
+    incorrect_outputs: Optional[str] = None,
+    contact_phone: Optional[str] = None,
+    general_comments: Optional[str] = None,
+) -> bool:
+    payload = {
+        "farmer_phone": farmer_phone or "guest",
+        "rating": rating,
+        "difficulties": difficulties or "",
+        "incorrect_model": incorrect_model or "",
+        "incorrect_outputs": incorrect_outputs or "",
+        "contact_phone": contact_phone or "",
+        "general_comments": general_comments or "",
+        "submitted_at": datetime.now().isoformat(),
+    }
+    return _insert("feedback", payload)

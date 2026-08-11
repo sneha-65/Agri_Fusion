@@ -35,7 +35,11 @@ def _dedented_markdown(body, *args, **kwargs):
 st.markdown = _dedented_markdown
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/..")
- 
+
+import importlib
+import backend.database as backend_db
+importlib.reload(backend_db)
+
 from backend.predict import predict, get_soil_data, city_soil, crop_kc
 from backend.weather import get_weather, get_forecast, CITY_COORDS
 from backend.database import (
@@ -49,6 +53,11 @@ from backend.database import (
     get_farmer as supabase_get_farmer,
     update_last_login as supabase_update_last_login,
 )
+
+try:
+    from backend.database import save_feedback
+except Exception:
+    save_feedback = getattr(backend_db, "save_feedback", None)
 from datetime import datetime, timedelta
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
@@ -1570,6 +1579,7 @@ with st.sidebar:
         "📊  Project Overview",
         "🔮  Predictions",
         "🚀  Agri Fusion (All-in-One)",
+        "💬  Feedback",
     ]
     if "sidebar_nav" not in st.session_state:
         st.session_state.sidebar_nav = nav_labels[2]
@@ -2981,12 +2991,13 @@ elif page == "🌾  Crop Recommendation":
             except Exception as e:
                 st.error(f"❌ Error: {e}")
                 st.info("Try selecting a different city or check if Open-Meteo / SoilGrids is reachable.")
+
 # ══════════════════════════════════════════════════════════════════════════════
 # IRRIGATION
 # ══════════════════════════════════════════════════════════════════════════════
-elif page == "💧  Irrigation Advisor":
+elif page in ["💧  Irrigation Advisor", "🌾 Predictions"]:
     render_prediction_breadcrumb(page)
-    st.markdown("# 💧 Irrigation Advisor")
+    st.markdown("# 💧 Crop Water Requirement & Irrigation Recommendation")
     st.markdown(DISCLAIMER, unsafe_allow_html=True)
 
     # ── HOW IT WORKS ──────────────────────────────────────────────────────────
@@ -3020,72 +3031,6 @@ elif page == "💧  Irrigation Advisor":
         "🌾 Almost Ready":  "Late-season",
     }
     CITIES_IRR = sorted(CITY_SOIL["City"].tolist())
-
-    # ── FIX 1: Best irrigation window based on temperature ───────────────────
-    def irrigation_window(temperature: float):
-        """Recommended watering window (start_hr, end_hr, label) — not hardcoded."""
-        if temperature >= 38:
-            return (5.0, 7.0, "5:00 AM – 7:00 AM")     # extreme heat — irrigate very early
-        elif temperature >= 32:
-            return (5.5, 7.5, "5:30 AM – 7:30 AM")     # hot day — early morning
-        elif temperature <= 22:
-            return (7.0, 9.0, "7:00 AM – 9:00 AM")     # cool day — slightly later is fine
-        else:
-            return (6.0, 8.0, "6:00 AM – 8:00 AM")     # normal
-
-    def best_irrigation_time(temperature: float) -> str:
-        """Window label only — used for forward-looking forecast days, where
-        'now' and 'already irrigated today' don't apply."""
-        return irrigation_window(temperature)[2]
-
-    # ── FIX 1b: time-aware advice for TODAY — accounts for the current
-    # clock time and whether the farmer already watered today, instead of
-    # always showing the morning window even at 9 PM. ──────────────────────
-    def get_irrigation_advice(temperature: float, now: datetime, already_irrigated_today: bool) -> dict:
-        start_h, end_h, window = irrigation_window(temperature)
-
-        if already_irrigated_today:
-            return {
-                "status":    "done_today",
-                "day_label": "tomorrow",
-                "window":    window,
-                "message":   f"You've already watered today — nice. Next best window: tomorrow, {window}.",
-            }
-
-        current_h = now.hour + now.minute / 60
-        if current_h < start_h:
-            return {
-                "status":    "wait_today",
-                "day_label": "today",
-                "window":    window,
-                "message":   f"Water your crop between {window} today.",
-            }
-        elif start_h <= current_h <= end_h:
-            return {
-                "status":    "irrigate_now",
-                "day_label": "today",
-                "window":    window,
-                "message":   f"You're inside the best window right now ({window}) — irrigate now.",
-            }
-        else:
-            return {
-                "status":    "wait_tomorrow",
-                "day_label": "tomorrow",
-                "window":    window,
-                "message":   f"Today's best window ({window}) has passed. Water first thing tomorrow, {window}.",
-            }
-
-    # ── FIX 2: Next irrigation days based on water need AND rainfall ──────────
-    def next_irrigation_days(water_mm: float, rainfall_mm: float) -> int:
-        """
-        If it rained today, the soil already got some water — can wait longer.
-        If no rain and high water need — irrigate sooner.
-        """
-        effective = max(0, water_mm - rainfall_mm * 0.7)  # rainfall offsets need
-        if effective > 10:   return 1
-        elif effective >= 5: return 2
-        elif effective >= 2: return 3
-        else:                return 4
 
     # ── INPUT FORM ────────────────────────────────────────────────────────────
     with st.form("irrigation_form"):
@@ -3131,7 +3076,7 @@ elif page == "💧  Irrigation Advisor":
         irr_days = st.slider("📅 Show forecast for how many days?", 1, 7, 3)
 
         submitted_irr = st.form_submit_button(
-            "💧 Tell Me How Much Water My Crop Needs",
+            "💧 Get My Irrigation Recommendation",
             use_container_width=True
         )
 
@@ -3142,84 +3087,58 @@ elif page == "💧  Irrigation Advisor":
         method       = irr_method if irr_method != "I don't know" else None
         pump         = irr_pump if irr_pump > 0 else None
 
-        with st.spinner("📡 Fetching today's weather and calculating..."):
+        with st.spinner("📡 Fetching live weather and computing irrigation decision..."):
             try:
-                from backend.predict import predict
-                from backend.weather import get_weather, get_forecast
-
-                # ── TODAY'S WEATHER ───────────────────────────────────────────
-                weather    = get_weather(lat, lon)
                 user_input = {
-                    "city":              irr_city,
-                    "crop":              irr_crop,
-                    "growth_stage":      growth_stage,
-                    "farm_size":         irr_size,
-                    "farm_size_unit":    irr_unit,
-                    "irrigation_source": irr_src,
-                    "irrigation_method": method,
-                    "pump_lpm":          pump,
+                    "city":                     irr_city,
+                    "crop":                     irr_crop,
+                    "growth_stage":             growth_stage,
+                    "farm_size":                irr_size,
+                    "farm_size_unit":           irr_unit,
+                    "irrigation_source":        irr_src,
+                    "irrigation_method":        method,
+                    "pump_lpm":                 pump,
+                    "already_irrigated_today":  irr_already_watered,
                 }
-                result = api_predict_irrigation(user_input, weather)
 
-                # ── FIX 2: compute next days using rainfall-aware function ────
-                irrigate     = result["irrigation_required"]
-                water_mm_val = result["water_requirement_mm_day"]
-                liters_val   = result["total_liters"]
-                motor_mins   = result["motor_minutes"]
+                import importlib
+                import backend.predict as backend_predict_mod
+                importlib.reload(backend_predict_mod)
 
-                # Use rainfall-aware next irrigation days
-                today_rain  = weather["rainfall"]
-                next_days   = next_irrigation_days(water_mm_val, today_rain)
-                next_date   = (datetime.now() + timedelta(days=next_days)).strftime("%d %B %Y")
+                weather = get_weather(lat, lon)
+                result  = backend_predict_mod.predict(user_input, weather)
 
-                # ── FIX 1: time-aware advice — accounts for the current clock
-                # time AND whether the farmer already watered today, instead of
-                # always showing the morning window even at 9 PM. ─────────────
-                today_temp = weather["temperature"]
-                advice     = get_irrigation_advice(today_temp, datetime.now(), irr_already_watered)
-
-                # If the farmer already watered today, the next watering is
-                # tomorrow — regardless of what the rainfall-based schedule
-                # would have said for "today".
-                if irrigate and advice["status"] == "done_today":
-                    next_days = 1
-                    next_date = (datetime.now() + timedelta(days=1)).strftime("%d %B %Y")
-
-                # Motor time formatted
-                if motor_mins and motor_mins >= 60:
-                    hrs = motor_mins // 60; mins = motor_mins % 60
-                    time_display = f"{hrs} hr {mins} min" if mins else f"{hrs} hr"
-                elif motor_mins:
-                    time_display = f"{motor_mins} min"
-                else:
-                    time_display = None
+                irr_status   = result.get("irrigation_status", "IRRIGATION REQUIRED TODAY")
+                farmer_msg   = result.get("farmer_message", result.get("recommendation", "Irrigate your crop today."))
+                water_mm     = result.get("water_requirement_mm_day", 0.0)
+                net_irr_mm   = result.get("net_irrigation_mm", water_mm)
+                total_liters = result.get("total_water_liters", result.get("total_liters", 0.0))
+                water_disp   = result.get("water_display", f"Approximately {total_liters:,.0f} liters")
+                best_time    = result.get("best_irrigation_time", "06:00 AM – 08:00 AM")
+                best_date    = result.get("best_irrigation_date", datetime.now().strftime("%d %B %Y"))
+                next_days    = result.get("next_irrigation_days", 1)
+                next_disp    = result.get("next_irrigation_display", f"In {next_days} days")
+                next_date    = result.get("next_irrigation_date", (datetime.now() + timedelta(days=next_days)).strftime("%d %B %Y"))
+                motor_time     = result.get("motor_running_time")
+                ref_motor_time = result.get("reference_motor_running_time")
 
                 # ── 1. RESULT BANNER ──────────────────────────────────────────
-                if not irrigate:
+                if "COMPLETED" in irr_status:
                     banner_color = "#7cb342"
                     banner_icon  = "✅"
-                    banner_title = "No irrigation needed today"
-                    banner_sub   = "Your crop has enough moisture. Check again tomorrow."
-                elif advice["status"] == "done_today":
+                    banner_title = "✅ WATERING COMPLETED TODAY"
+                elif "NO IRRIGATION" in irr_status:
                     banner_color = "#7cb342"
-                    banner_icon  = "✅"
-                    banner_title = "Already watered today"
-                    banner_sub   = advice["message"]
-                elif advice["status"] == "irrigate_now":
+                    banner_icon  = "🌧️"
+                    banner_title = "🌧️ NO IRRIGATION NEEDED TODAY"
+                elif "TOMORROW" in irr_status:
                     banner_color = "#f0b429"
-                    banner_icon  = "🚿"
-                    banner_title = "Irrigate your crop now"
-                    banner_sub   = advice["message"]
-                elif advice["status"] == "wait_today":
-                    banner_color = "#f0b429"
-                    banner_icon  = "⏳"
-                    banner_title = "Water later today"
-                    banner_sub   = advice["message"]
-                else:  # wait_tomorrow — today's window already passed
-                    banner_color = "#f0b429"
-                    banner_icon  = "🌙"
-                    banner_title = "Water first thing tomorrow"
-                    banner_sub   = advice["message"]
+                    banner_icon  = "🌅"
+                    banner_title = "🌅 IRRIGATE TOMORROW MORNING"
+                else:
+                    banner_color = "#7cb342"
+                    banner_icon  = "💧"
+                    banner_title = "💧 IRRIGATION REQUIRED TODAY"
 
                 st.markdown(f"""
                 <div style='background:linear-gradient(135deg,rgba(20,38,14,0.95),rgba(40,68,24,0.90));
@@ -3235,8 +3154,8 @@ elif page == "💧  Irrigation Advisor":
                         🌾 {irr_crop} &nbsp;|&nbsp; 📍 {irr_city}
                         &nbsp;|&nbsp; 📅 {datetime.now().strftime("%d %B %Y")}
                     </div>
-                    <div style='font-size:13px; color:rgba(255,255,255,0.45);
-                                margin-top:6px;'>{banner_sub}</div>
+                    <div style='font-size:13px; color:rgba(255,255,255,0.75);
+                                margin-top:6px;'>{farmer_msg}</div>
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -3245,60 +3164,81 @@ elif page == "💧  Irrigation Advisor":
 
                 k1.markdown(f"""
                 <div class='mcard'>
-                    <div class='val'>{water_mm_val} mm</div>
-                    <div class='lbl'>💧 Water Needed<br>per day</div>
+                    <div class='val'>{total_liters:,.0f} L</div>
+                    <div class='lbl'>🪣 Estimated farm water<br>{water_disp}</div>
                 </div>""", unsafe_allow_html=True)
 
                 k2.markdown(f"""
                 <div class='mcard'>
-                    <div class='val'>{liters_val:,.0f} L</div>
-                    <div class='lbl'>🪣 Total Water<br>for your farm</div>
+                    <div class='val'>{net_irr_mm} mm</div>
+                    <div class='lbl'>💧 Net water to provide<br>({water_mm} mm/day crop need)</div>
                 </div>""", unsafe_allow_html=True)
-
-                if irrigate:
-                    best_time_val   = advice["window"]
-                    best_time_label = f"⏰ Best Time to water ({advice['day_label']})"
-                else:
-                    best_time_val   = irrigation_window(today_temp)[2]
-                    best_time_label = "⏰ Reference window (not needed today)"
 
                 k3.markdown(f"""
                 <div class='mcard'>
-                    <div class='val'>{best_time_val}</div>
-                    <div class='lbl'>{best_time_label}<br>
-                    <span style='font-size:10px; opacity:0.6;'>
-                    (based on today {today_temp}°C)</span></div>
+                    <div class='val'>{best_time}</div>
+                    <div class='lbl'>⏰ Best time to water<br>({best_date})</div>
                 </div>""", unsafe_allow_html=True)
 
                 k4.markdown(f"""
                 <div class='mcard'>
-                    <div class='val'>After {next_days} day(s)</div>
-                    <div class='lbl'>📅 Water again on<br>{next_date}</div>
+                    <div class='val'>{next_disp}</div>
+                    <div class='lbl'>📅 Next watering<br>{next_date}</div>
                 </div>""", unsafe_allow_html=True)
 
-                # ── 3. PUMP TIME ──────────────────────────────────────────────
-                if time_display:
+                # ── 3. MOTOR RUNNING TIME ──────────────────────────────────────
+                if motor_time and pump:
                     st.markdown("<br>", unsafe_allow_html=True)
                     st.markdown(f"""
                     <div class='glass' style='text-align:center; padding:22px;'>
                         <div style='font-size:14px; color:rgba(255,255,255,0.5);
-                                    margin-bottom:6px;'>🔧 Run your pump for</div>
+                                    margin-bottom:6px;'>⚙️ Pump Running Time</div>
                         <div style='font-size:44px; font-weight:800;
                                     background:linear-gradient(135deg,#7cb342,#f0b429);
                                     -webkit-background-clip:text;
                                     background-clip:text; color:transparent;'>
-                            {time_display}
+                            Approximately {motor_time}
                         </div>
                         <div style='font-size:12px; color:rgba(255,255,255,0.35); margin-top:4px;'>
-                            Based on {int(irr_pump or 100)} L/min pump
-                            &nbsp;·&nbsp; {irr_size} {irr_unit} farm
+                            Based on {int(pump)} L/min pump &nbsp;·&nbsp; {irr_size} {irr_unit} farm
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                elif ref_motor_time and ref_motor_time != "0 minutes":
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown(f"""
+                    <div class='glass' style='text-align:center; padding:20px; border:1px solid rgba(251,191,36,0.3);'>
+                        <div style='font-size:14px; color:#fbbf24; font-weight:700; margin-bottom:4px;'>
+                            ⚙️ Pump Running Time (Reference Estimate)
+                        </div>
+                        <div style='font-size:38px; font-weight:800;
+                                    background:linear-gradient(135deg,#f0b429,#ffffff);
+                                    -webkit-background-clip:text;
+                                    background-clip:text; color:transparent;'>
+                            Approximately {ref_motor_time}
+                        </div>
+                        <div style='font-size:12px; color:rgba(255,255,255,0.65); margin-top:8px; line-height:1.5;'>
+                            ⚠️ <strong>Caution:</strong> This runtime is calculated using a standard <strong>100 L/min pump</strong> as a reference benchmark.<br>
+                            To calculate the exact motor running time for your farm, please enter your actual pump flow rate (L/min) in Step 2.
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown("""
+                    <div class='glass' style='text-align:center; padding:18px; border-color:rgba(255,255,255,0.08);'>
+                        <div style='font-size:14px; color:#fbbf24; font-weight:600; margin-bottom:4px;'>
+                            ⚙️ Pump Running Time
+                        </div>
+                        <div style='font-size:13px; color:rgba(255,255,255,0.6);'>
+                            Enter pump flow rate (L/min) in Step 2 to calculate exact motor running time.
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
 
                 # ── 4. WEATHER USED (collapsed) ───────────────────────────────
                 st.markdown("<br>", unsafe_allow_html=True)
-                with st.expander("🌤️ Today's weather used for this calculation"):
+                with st.expander("🌤️ Today's weather data used for this decision"):
                     wc = st.columns(6)
                     wc[0].metric("🌡️ Temp",    f"{weather['temperature']}°C")
                     wc[1].metric("💧 Humidity", f"{weather['relative_humidity']}%")
@@ -3307,66 +3247,88 @@ elif page == "💧  Irrigation Advisor":
                     wc[4].metric("☀️ Solar",    f"{weather['solar_radiation']} W/m²")
                     wc[5].metric("💦 ET₀",      f"{weather['et0']} mm/day")
 
-                # ── 5. FIX 3: SCHEDULE — consistent with banner ───────────────
+                with st.expander("📋 View Calculation & AI Reason Details"):
+                    st.markdown(f"""
+                    • **Decision:** `{irr_status}`
+                    • **Reason:** {result.get('reason', 'Based on current weather and crop water demand.')}
+                    • **Location:** {result.get('location', irr_city)}
+                    • **Crop:** {result.get('crop', irr_crop)} ({result.get('growth_stage', growth_stage)})
+                    • **Crop Requirement (ML Target):** {water_mm} mm/day
+                    • **Estimated Farm Area Water:** {total_liters:,.0f} L ({water_disp})
+                    • **Pump Flow Rate:** {f"{int(pump)} L/min" if pump else "Not provided"}
+                    • **Motor Running Time:** {motor_time if motor_time else "Enter pump flow rate to calculate exact motor time"}
+                    """)
+
+                # ── 5. MULTI-DAY SCHEDULE ─────────────────────────────────────
                 if irr_days > 1:
                     st.markdown("---")
                     st.markdown(f"### 📅 Your {irr_days}-Day Irrigation Schedule")
                     st.caption(
                         "Each day uses its own forecast weather. "
-                        f"Today: irrigate after {next_days} day(s) — "
-                        "the table reflects this schedule below."
+                        f"Today's decision: {irr_status} — "
+                        "the schedule reflects forecast recommendations below."
                     )
 
                     forecast   = get_forecast(lat, lon, days=irr_days)
-                    # FIX: initialise skip_until from TODAY's calculation
-                    # so banner and table say the same thing
-                    skip_until = next_days  # skip N days from today as banner says
+                    skip_until = result.get("next_irrigation_days", 1)
                     rows       = []
+                    show_pump_col = pump is not None and pump > 0
 
                     for day_idx, f in enumerate(forecast):
-                        r        = predict(user_input, f)
-                        day_mm   = r["water_requirement_mm_day"]
-                        day_lit  = r["total_liters"]
-                        day_rain = f.get("rainfall", 0) or 0
-                        day_temp = f.get("temperature", 28)
+                        r_f           = backend_predict_mod.predict(user_input, f)
+                        day_crop_need = r_f.get("crop_water_requirement_mm", r_f.get("water_requirement_mm_day", 0.0))
+                        day_net_mm    = r_f.get("net_irrigation_mm", day_crop_need)
+                        day_lit       = r_f.get("total_water_liters", r_f.get("total_liters", 0.0))
+                        day_rain      = f.get("rainfall", 0) or 0
+                        day_temp      = f.get("temperature", 28)
 
-                        # FIX: use rainfall-aware schedule logic
-                        if day_idx >= skip_until and r["irrigation_required"]:
-                            action     = "✅ Irrigate"
-                            # how long to skip after this irrigation day
-                            day_next   = next_irrigation_days(day_mm, day_rain)
-                            skip_until = day_idx + day_next
-                            day_time   = best_irrigation_time(day_temp)
+                        if day_idx >= skip_until and r_f.get("irrigation_required_today", r_f.get("irrigation_required", False)):
+                            action            = "✅ Irrigate"
+                            day_next          = r_f.get("next_irrigation_days", 1)
+                            skip_until        = day_idx + day_next
+                            day_time          = r_f.get("best_irrigation_time", "06:00 AM – 08:00 AM")
+                            irr_water_display = f"~{day_lit:,.0f} L" if day_lit > 0 else "0 L"
                         else:
-                            action   = "⏭️ Skip"
-                            day_time = "—"
+                            action            = "⏭️ Skip"
+                            day_time          = "—"
+                            irr_water_display = "0 L"
 
-                        # Pump time only for irrigate days
-                        if pump and action == "✅ Irrigate":
+                        # Pump time only for irrigate days and only if pump given
+                        if show_pump_col and action == "✅ Irrigate" and day_lit > 0:
                             dm = round(day_lit / pump)
                             if dm >= 60:
                                 h = dm // 60; m = dm % 60
                                 pump_disp = f"{h}h {m}m" if m else f"{h}h"
                             else:
                                 pump_disp = f"{dm} min"
-                        else:
+                        elif show_pump_col:
                             pump_disp = "—"
+                        else:
+                            pump_disp = None
 
                         rows.append({
-                            "date":     f["date"],
-                            "temp":     day_temp,
-                            "rain":     day_rain,
-                            "day_mm":   day_mm,
-                            "day_lit":  day_lit,
-                            "time":     day_time,
-                            "pump":     pump_disp,
-                            "action":   action,
+                            "date":                  f["date"],
+                            "temp":                  day_temp,
+                            "rain":                  day_rain,
+                            "crop_need":             f"{day_crop_need:.1f} mm",
+                            "irrigation_water_disp": irr_water_display,
+                            "time":                  day_time,
+                            "pump":                  pump_disp,
+                            "action":                action,
                         })
 
-                    # Column headers
-                    hdr_labels = ["Date","Temp","Rain","Water Need",
-                                  "Total Water","Best Time","Pump","Action"]
-                    hdr_cols   = st.columns([1.8,0.9,0.9,1.6,1.6,1.4,1.3,1.3])
+                    # Build header using exact clear scientific terminology
+                    hdr_labels = ["Date","Temp","Rain","Crop Need","Irrigation Water","Best Time"]
+                    if show_pump_col:
+                        hdr_labels.append("Pump Time")
+                    hdr_labels.append("Action")
+
+                    col_widths = [1.8, 0.9, 0.9, 1.4, 1.8, 1.6]
+                    if show_pump_col:
+                        col_widths.append(1.3)
+                    col_widths.append(1.3)
+
+                    hdr_cols = st.columns(col_widths)
                     for col, lbl in zip(hdr_cols, hdr_labels):
                         col.markdown(
                             f"<div style='font-size:10px; font-weight:700; "
@@ -3376,21 +3338,22 @@ elif page == "💧  Irrigation Advisor":
                             unsafe_allow_html=True
                         )
 
-                    # Data rows
                     for row in rows:
                         act_color = "#7cb342" if "Irrigate" in row["action"] \
                                     else "rgba(255,255,255,0.28)"
-                        row_cols  = st.columns([1.8,0.9,0.9,1.6,1.6,1.4,1.3,1.3])
-                        values    = [
+                        row_vals  = [
                             row["date"],
                             f"{row['temp']}°C",
                             f"{row['rain']} mm",
-                            f"{row['day_mm']} mm/day",
-                            f"{row['day_lit']:,.0f} L",
+                            row["crop_need"],
+                            row["irrigation_water_disp"],
                             row["time"],
-                            row["pump"],
                         ]
-                        for col, val in zip(row_cols[:-1], values):
+                        if show_pump_col:
+                            row_vals.append(row["pump"])
+
+                        row_cols = st.columns(col_widths)
+                        for col, val in zip(row_cols[:-1], row_vals):
                             col.markdown(
                                 f"<div style='font-size:12px; "
                                 f"color:rgba(255,255,255,0.72); "
@@ -4904,3 +4867,124 @@ elif page == "🚀  Agri Fusion (All-in-One)":
         with st.expander("🔧 Technical / Developer Information"):
 
             st.json(R)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FARMER FEEDBACK SECTION
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "💬  Feedback":
+    render_prediction_breadcrumb(page)
+    st.markdown("# 💬 Farmer Feedback & Support")
+    st.markdown(
+        "<div class='disclaimer'>"
+        "💡 <strong>We value your feedback!</strong> Your responses help us refine model predictions and improve user experience for farmers across India. "
+        "<strong>Note: All fields are optional.</strong>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("""
+    <div class='glass' style='margin-bottom:24px;'>
+        <div style='display:flex; align-items:center; gap:14px;'>
+            <div style='font-size:36px;'>📝</div>
+            <div>
+                <div style='color:#7cb342; font-weight:700; font-size:16px; margin-bottom:4px;'>
+                    Share Your Experience or Report an Issue
+                </div>
+                <div style='color:rgba(255,255,255,0.7); font-size:13.5px;'>
+                    Tell us if you faced any difficulty, saw an incorrect prediction, or have suggestions.
+                </div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.form("feedback_form"):
+        st.markdown("### ⭐ 1. Overall System Rating")
+        rating = st.select_slider(
+            "How satisfied are you with Agri Fusion?",
+            options=[1, 2, 3, 4, 5],
+            value=5,
+            format_func=lambda x: {
+                1: "⭐ 1 — Needs Improvement",
+                2: "⭐⭐ 2 — Fair",
+                3: "⭐⭐⭐ 3 — Good",
+                4: "⭐⭐⭐⭐ 4 — Very Good",
+                5: "⭐⭐⭐⭐⭐ 5 — Excellent"
+            }[x],
+            help="Select a rating score from 1 to 5 stars (optional)"
+        )
+
+        st.markdown("---")
+        st.markdown("### ⚡ 2. Difficulties or Usability Issues")
+        difficulties_selected = st.multiselect(
+            "Did you face any difficulties while using the application?",
+            [
+                "Slow loading speed / timeout",
+                "Difficulty selecting city / location",
+                "Understanding scientific terms / water units",
+                "Pump time calculation unclear",
+                "Mobile layout / screen rendering",
+                "Weather data not updating",
+            ],
+            help="Select any difficulties you encountered (optional)"
+        )
+        difficulties_text = st.text_area(
+            "Details on difficulties faced (optional):",
+            placeholder="e.g. Weather data took longer than expected to fetch...",
+            height=80
+        )
+
+        st.markdown("---")
+        st.markdown("### 🤖 3. Model Accuracy Feedback")
+        incorrect_model = st.selectbox("Did any specific model provide unexpected or incorrect outputs?", [
+            "None / All models worked great",
+            "🌾 Crop Recommendation",
+            "🌡️ Climate Risk",
+            "💧 Irrigation Advisor",
+            "📈 Yield Estimator",
+            "💰 Market Price",
+            "Multiple Models",
+        ])
+        incorrect_text = st.text_area(
+            "If yes, please describe what output was unexpected or incorrect (optional):",
+            placeholder="e.g. Crop recommendation suggested Rice, but my soil pH is too low for Rice...",
+            height=100
+        )
+
+        st.markdown("---")
+        st.markdown("### 📱 4. Contact Information (Optional)")
+        contact_phone = st.text_input(
+            "Your Mobile / WhatsApp Number (if you'd like our support team to contact you):",
+            value=st.session_state.get("farmer_phone", ""),
+            placeholder="e.g. 9876543210",
+            max_chars=12,
+            help="Optional — enter your mobile number if you would like us to follow up with you."
+        )
+
+        st.markdown("---")
+        st.markdown("### 💬 5. Additional Comments & Suggestions")
+        general_comments = st.text_area(
+            "Any other suggestions or features you would like to see in Agri Fusion (optional):",
+            placeholder="e.g. Please add support for regional languages like Telugu / Hindi...",
+            height=100
+        )
+
+        submit_fb = st.form_submit_button("💬 Submit Feedback", use_container_width=True)
+
+    if submit_fb:
+        diff_summary = ", ".join(difficulties_selected)
+        if difficulties_text:
+            diff_summary = f"{diff_summary} | {difficulties_text}" if diff_summary else difficulties_text
+
+        saved = save_feedback(
+            farmer_phone=st.session_state.get("farmer_phone", "guest"),
+            rating=rating,
+            difficulties=diff_summary,
+            incorrect_model=incorrect_model if incorrect_model != "None / All models worked great" else "",
+            incorrect_outputs=incorrect_text,
+            contact_phone=contact_phone,
+            general_comments=general_comments,
+        )
+
+        st.balloons()
+        st.success("🎉 Thank you! Your feedback has been recorded successfully. We appreciate your input!")
